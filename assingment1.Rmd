@@ -1,0 +1,263 @@
+---
+title: "Computational Methods 1 - Assignment 1"
+author: "Luke Korthals"
+date: "2024-05-12"
+output: pdf_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+### Imports, global settings, and Functions
+
+I am using `tidyverse` for data manipulation and plotting. To make sure plots are consistent, a color set is defined using `RColorBrewer`.
+```{r, echo=TRUE, message=FALSE, warning=FALSE}	
+# Imports
+library(tidyverse)
+
+# Global settings
+plot_colors <- RColorBrewer::brewer.pal(8, "Set2")
+```
+
+The following functions are used throughout the assignment.
+```{r, echo=TRUE, message=FALSE, warning=FALSE}	
+# Functions
+prob_cw <- function(x, lambda = 0.5) {
+    # Computes the Curie-Weiss likelihood for a given data vector x and lambda
+    # returns: the likelihood
+    # ----------
+    # x: data vector
+    # lambda: parameter of the Curie-Weiss likelihood
+
+    if (is.null(dim(x))) {
+        m <- 1
+        n <- length(x)
+    }
+    if (!is.null(dim(x))) {
+        m <- dim(x)[1]
+        n <- dim(x)[2]
+    }
+
+    pr_cw_unnorm <- function(n, r, lambda) choose(n, r) * exp(-lambda * r * (r - 1))
+    pr_cw_i <- array(NA, dim = c(m, length(lambda)))
+    pr_cw <- c()
+    Z_cw <- 0
+    for (i in 0:n) Z_cw <- Z_cw + pr_cw_unnorm(n, i, lambda)
+    for (k in 1:m) {
+        if (!is.null(dim(x))) r <- sum(x[k, ])
+        if (is.null(dim(x))) r <- sum(x)
+        pr_cw_i[k, ] <- pr_cw_unnorm(n, r, lambda) / Z_cw
+    }
+    for (j in 1:length(lambda)) pr_cw[j] <- prod(pr_cw_i[, j])
+    return(pr_cw)
+}
+
+
+plot_gamma_ <- function(s, r, name, stat_fun_only = FALSE) {
+    # Plots a gamma distribution with shape s and rate r
+    # returns: Either a ggplot object or a stat_function object that can be added to a ggplot object
+    # ----------
+    # s: shape parameter of the gamma distribution
+    # r: rate parameter of the gamma distribution
+    # name: name of the distribution
+    # stat_fun_only: if TRUE, returns a stat_function object only
+
+    # Compute Gamma distribution
+    ps <- stat_function(fun = dgamma, args = list(shape = s, rate = r), aes(color = name), linewidth = 1)
+    if (stat_fun_only) {
+        return(ps)
+    }
+
+    # Create plot
+    xmin <- qgamma(1e-25, s, r)
+    xmax <- qgamma(0.99999, s, r)
+    p <- data.frame(x = c(xmin, xmax)) %>%
+        ggplot(aes(x = x)) +
+        ps +
+        labs(x = expression(lambda), y = "Density") +
+        scale_color_manual(values = plot_colors, name = "Distribution") +
+        theme_classic() +
+        coord_cartesian(expand = TRUE, clip = "off")
+
+    return(p)
+}
+
+gamma_cw_grid_approx <- function(s, r, x, lambda_grid, n_samples) {
+    # Performs grid approximation using a gamma prior and Curie-Weiss likelihood
+    # returns: n_samples samples from the posterior
+    # ----------
+    # s: shape parameter of the gamma prior
+    # r: rate parameter of the gamma prior
+    # x: data vector
+    # lambda_grid: grid of values for lambda
+    # n_samples: number of samples to draw from the posterior
+
+    dat <- data.frame(lambda = lambda_grid) # Create grid
+    dat <- dat %>%
+        mutate(
+            prior = dgamma(lambda, s, r), # Evaluate prior
+            likelihood = prob_cw(x, lambda), # Evaluate likelihood
+            unnormalized_posterior = prior * likelihood, # Calculate unnormalized posterior
+            posterior = unnormalized_posterior / sum(unnormalized_posterior) # Normalized posterior
+        )
+
+    return(sample_n(dat, n_samples, replace = TRUE, weight = posterior)) # Sample from posterior
+}
+```
+
+
+
+### Question 1
+
+> From Chapter 6 of Bayes Rules (BR) we obtain a method in four steps to apply the grid approximation to the posterior. We use this grid approximation for $\lambda$ here. 
+We use the <span style="color:orange">Gamma prior with parameters $s = 2$ and $r = 2$</span>. 
+Use <span style="color:orange">grid approximation for the posterior $f(\lambda | x1, x2)$</span>. 
+We have the <span style="color:orange"> data $x1 = 1$ and $x2 = 1$</span>.
+
+First, the parameter for the Gamma prior and the data are defined.
+```{r}
+# Prior
+s <- 2
+r <- 2
+
+# Data
+x1 <- 1
+x2 <- 1
+```	
+
+
+> (a) Make a <span style="color:orange">plot of the Gamma distribution</span> with parameters s = 2 and r = 2.
+```{r}	
+plot_gamma_(s, r, "a: Prior")
+```
+
+As can be seen from this plot, the prior assumes that the weight of the edge $\lambda$ likely lies between 0 and 2.
+
+
+> (b) Define a <span style="color:orange">grid for λ with values {0, 0.5, 1, 1.5, 2}</span> and create the grid data structure for the parameter lambda grid, as shown in Chapter 6.**
+```{r}	
+lambda <- seq(0, 2, length = 5)
+dat <- data.frame(lambda)
+head(dat)
+```	
+
+
+> (c) <span style="color:orange">Add to grid data the prior and the likelihood.</span> 
+The likelihood you can add by applying the function prob cw in the R file on canvas. 
+The function has two arguments, the data vector (x1, x2) and the value (or values for the grid) for λ.
+```{r}
+dat <- dat %>%
+    mutate(
+        prior = dgamma(lambda, s, r),
+        likelihood = prob_cw(c(x1, x2), lambda)
+    )
+head(dat)
+```
+The data above shows that likelihood $L(\lambda|{1, 1})$ is highest for $\lambda = 0$ and $\lambda = 1$.
+
+>(d) <span style="color:orange">Add to the structure grid data the unnormalized posterior.</span> 
+Then in the final step use the sample n function as shown in the book BR to <span style="color:orange">obtain 10,000 posterior samples</span>. 
+And <span style="color:orange">plot the results</span>, both for the prior and for the posterior.
+```{r}
+# Calculate posterior
+dat <- dat %>%
+    mutate(
+        unnormalized_posterior = prior * likelihood,
+        posterior = unnormalized_posterior / sum(unnormalized_posterior)
+    )
+head(dat)
+```
+The data above shows that the posterior probability $f(\lambda|{x1, x2})$ is highest for $\lambda = 1$. 
+Even though $\lambda = 0$ had the highest likelihood, its prior probability $P(\lambda = 0) = 0$, making the corresponding posterior probability $P(\lambda = 0|{x1, x2}) = 0$ as well.
+```{r}
+# Simulate posterior
+n_samples <- 10000
+simulated_posterior_5 <- sample_n(dat, n_samples, replace = TRUE, weight = posterior)
+
+# Plot
+plot_gamma_(s, r, "a: Prior") +
+    geom_histogram(
+        data = simulated_posterior_5, 
+        aes(x = lambda, color = "b: Simulated Posterior (grid size 5)", after_stat(density)), 
+        fill = plot_colors[2], 
+        alpha = 0.5
+        )
+```	
+This plot shows that the simulated posterior is quite rough which suggests that the grid size is too small. 
+
+> (e) <span style="color:orange">Repeat the analysis</span> in (a)-(d) but now use a <span style="color:orange">grid of 501 equally spaced values between 0 and 5 for λ</span>.
+```{r}
+# Define grid
+lambda <- seq(0, 5, length = 501)
+
+# Simulate posterior
+simulated_posterior_501 <- gamma_cw_grid_approx(s, r, c(x1, x2), lambda, n_samples) # Function defined above
+
+# Plot
+plot_gamma_(s, r, "a: Prior") +
+    geom_histogram(
+        data = simulated_posterior_501, 
+        aes(x = lambda, color = "b: Simulated Posterior (grid size 501)", after_stat(density)), 
+        fill = plot_colors[2], 
+        alpha = 0.5
+        )
+```	
+
+The plot above shoes that the approximation using a grid size of 501 is much smoother than the approximation using a grid size of 5.
+
+
+### Question 2
+
+> We will take a closer look at the combination of the likelihood and the Gamma prior here. 
+In Section 5.2.4 of BR it is shown that the Poisson probability for the likelihood is conjugate to the Gamma prior. 
+<span style="color:orange">Here we will show that the combination of the Curie-Weiss likelihood and the Gamma prior are conjugate</span> for the unnormalised likelihood.
+
+
+> (a) Ignoring the normalising constants for the Gamma prior and the likelihood prior, <span style="color:orange">show in a similar way as in BR, that the posterior with the Gamma prior is conjugate to the Curie-Weiss model</span> given above.**
+
+Our prior $f(\lambda)$ is given by a Gamma pdf, the likelihood $L(\lambda | x1, x2)$ is given by the Curie-Weiss model, and the posterior $f(\lambda | x1, x2)$ is proportional to the product of the prior and the likelihood.
+\[
+  f(\lambda) = \frac{r^s}{\Gamma(s)}\lambda^{s-1}e^{-r\lambda} \\
+  L(\lambda | {x1, x2}) = \frac{1}{Z_{CW}}e^{-\lambda(x1+x2)(x1+x2-1)} \\
+  f(\lambda | {x1, x2}) \propto \lambda^{s-1}e^{-r\lambda} \cdot e^{-\lambda(x1+x2)(x1+x2-1)} = \lambda^{s-1}e^{\lambda(-r)-(x1+x2-1)\lambda(x1+x2)}
+\]
+
+Any constants that do not depend on $\lambda$ can be dropped and the remaining kernel is still proportional to the posterior.
+\[
+  f(\lambda | {x1, x2}) \propto \lambda^{s-1}e^{-r\lambda} \cdot e^{-\lambda(x1+x2)(x1+x2-1)} = \lambda^{s-1}e^{\lambda(-r)-(x1+x2-1)\lambda(x1+x2)}
+\]
+
+This kernel corresponds to a Gamma pdf, thus, the resulting posterior is conjugate to the prior Gamma.
+\[
+  \lambda | {x1, x2} \sim Gamma({s, r+(x1+x2-1)(x1+x2)})
+\]
+
+
+
+> (b) What are the <span style="color:orange">parameters of the posterior distribution</span> of the pair Gamma-Curie-Weiss?**
+
+In Our case, we have: 
+\[
+    s = r = 2 \\
+    x1 = x2 = 1 \\ 
+    f(\lambda) \sim Gamma({2, 2}) \\ 
+    \lambda | {1, 1} \sim Gamma({2, 2+(1+1-1)(1+1)}) = Gamma({2, 4})
+\]
+
+
+
+> (c) <span style="color:orange">Plot the prior, the sampled posterior and the posterior</span> in a single plot. 
+Use the prior Gamma(2, 2), the data x1 = 1 and x2 = 1.**
+```{r}
+# Calculate new Gamma parameters
+s_new <- s
+r_new <- r + (x1 + x2 - 1) * (x1 + x2)
+
+# Plot
+plot_gamma_(s, r, "a: Prior") +
+    geom_histogram(data = simulated_posterior_501, aes(x = lambda, color = "b: Simulated Posterior (grid size 501)", after_stat(density)), fill = plot_colors[2], alpha = 0.5) +
+    plot_gamma_(s_new, r_new, "c: Posterior", stat_fun_only = TRUE)
+```
+
+This plot shows that the simulated posterior with a grid size of 501 approximates the true posterior quite well. 
