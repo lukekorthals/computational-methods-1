@@ -261,3 +261,65 @@ plot_gamma_(s, r, "a: Prior") +
 ```
 
 This plot shows that the simulated posterior with a grid size of 501 approximates the true posterior quite well. 
+
+
+
+### Question 3
+
+> Next, we continue with the slightly harder problem of a network with
+three nodes. If there are three variables, then there are 23 = 8 possible
+structures that could underlie the data. Why is that? The first relation,
+between variables 1 and 2, is either there or not. So, there are two options.
+The second relation, between variables 1 and 3, is also either there or not,
+so there are also two possibilities. So there are four possible scenarios
+or structures for these two edges; both present, both absent, the first
+present while the second is absent, or the first absent and the second
+present. Continuing in this way, we see that for a network with p variables,
+there are $2p(p-1)/2$ possible edges, and thus $2p(p-1)/2$ possible network
+structures. This number grows very quickly, so we will stick to the threevariable
+network here. 
+The approach that Maarten advocates uses a spike and slab distribution,
+which follows the logic of the two questions we discussed earlier. If
+the effect is there, it stipulates a diffuse (i.e., wide) prior density on the
+edge weight. But if the effect is not there, it sets the effect to exactly
+zero. Whether the effect is present or not is modeled with an indicator
+variable. Let’s call this variable X. So, Xij = 1 indicates that there is an
+edge between variables i and j, and Xij = 0 indicates that there is no
+such edge. Figure 2 illustrates the setup for our three-variable network.
+We will examine the prior distributions that Maarten uses to model the
+edge indicator variables. Maarten currently uses two prior distributions
+for this. The first prior distribution is a binomial distribution with a predetermined
+value for the inclusion probability (actually, Maarten uses a
+Bernoulli prior, what is the difference?). 
+Let’s fix this prior inclusion probability to 0.5 (the default in the bgms R package used below). 
+The second prior is a beta-binomial prior (actually, beta-Bernoulli), which stipulates
+a beta prior distribution on the prior inclusion probability. The beta prior
+on the prior inclusion probability has two shape parameters, alpha and beta.
+
+
+> (a) Use the <span style="color:orange">binomial model to express or estimate (e.g., by simulation) the
+prior probabilities for each of the eight possible network structures</span>. And
+what are the prior inclusion probabilities for each of the three network
+relations?
+```{r}
+prior_inc_prob = 0.5
+prior_structure_prob = dbinom(0:8, 8, prior_inc_prob)
+``` 
+
+
+> (b) Use the <span style="color:orange">beta-binomial model with an alpha and beta shape parameter
+each equal to one to estimate the prior probabilities for each of the eight
+possible network structures</span>. Can you also use this to compute the prior
+inclusion probabilities for each of the three network relations?
+
+```{r}
+# Prior
+alpha = beta = 1
+prior_inc_prob_beta = rbeta(10000, alpha, beta)
+prior_structure_prob_beta = dbinom(0:8, 8, prior_inc_prob_beta)
+
+
+```
+
+> (c) <span style="color:orange">How do the prior structure probabilities differ</span> between the binomial
+model and the beta-binomial models?
